@@ -1,0 +1,26 @@
+{
+  "name": "planning-poker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Planning Poker collaboratif, auto-hébergeable, déployable en une commande.",
+  "scripts": {
+    "dev": "concurrently -n server,vite -c blue,magenta \"node server.js\" \"vite\"",
+    "build": "vite build",
+    "start": "NODE_ENV=production node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "vite": "^6.0.0"
+  }
+}
