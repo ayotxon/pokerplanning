@@ -23,6 +23,17 @@ export async function saveRoom(roomId, state) {
   }
 }
 
+export async function recordVisit() {
+  try {
+    const res = await fetch('/api/visit', { method: 'POST' });
+    if (!res.ok) return null;
+    const { count } = await res.json();
+    return typeof count === 'number' ? count : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function updateRoom(roomId, updater) {
   const current = await fetchRoom(roomId);
   if (!current) return null;

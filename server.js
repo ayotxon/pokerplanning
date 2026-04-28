@@ -11,6 +11,7 @@ const app = express();
 app.use(express.json({ limit: '128kb' }));
 
 const rooms = new Map();
+let visitCount = 0;
 
 function pruneStale() {
   const cutoff = Date.now() - ROOM_TTL_MS;
@@ -22,6 +23,11 @@ setInterval(pruneStale, 60 * 60 * 1000);
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, rooms: rooms.size });
+});
+
+app.post('/api/visit', (_req, res) => {
+  visitCount += 1;
+  res.json({ count: visitCount });
 });
 
 app.get('/api/rooms/:id', (req, res) => {

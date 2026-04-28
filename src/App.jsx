@@ -4,7 +4,7 @@ import {
   LogOut, Plus, UserPlus, Sparkles, AlertCircle,
   ChevronDown, ChevronRight, Timer, Award,
 } from 'lucide-react';
-import { fetchRoom, saveRoom, updateRoom } from './api.js';
+import { fetchRoom, saveRoom, updateRoom, recordVisit } from './api.js';
 
 // ============================================================
 // Constants
@@ -834,6 +834,35 @@ function Room({ roomId, userId, onLeave }) {
 }
 
 // ============================================================
+// Global footer (signature + visit counter)
+// ============================================================
+function GlobalFooter() {
+  const [count, setCount] = useState(null);
+  const calledRef = useRef(false);
+
+  useEffect(() => {
+    if (calledRef.current) return;
+    calledRef.current = true;
+    recordVisit().then(c => { if (c != null) setCount(c); });
+  }, []);
+
+  return (
+    <div
+      className="text-center py-3 text-[10px] tracking-wide"
+      style={{ color: 'var(--ink-3)', opacity: 0.55 }}>
+      <span>Powered by </span>
+      <span className="ff-display" style={{ fontWeight: 600 }}>Ayawo AMEGANVI</span>
+      {count != null && (
+        <>
+          <span className="mx-2">·</span>
+          <span className="ff-mono tabular">{count.toLocaleString('fr-FR')} visites</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // App
 // ============================================================
 export default function App() {
@@ -872,6 +901,7 @@ export default function App() {
             userId={session.userId}
             onLeave={handleLeave}
           />}
+      <GlobalFooter />
     </>
   );
 }
