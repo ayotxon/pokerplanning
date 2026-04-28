@@ -253,7 +253,7 @@ function Home({ onJoin }) {
                      style={{ color: 'var(--ink-2)' }}>Votre nom</label>
               <input
                 type="text" value={name} onChange={(e) => setName(e.target.value)}
-                placeholder="Marie Curie" maxLength={30}
+                placeholder="Ayawo" maxLength={30}
                 className="w-full px-4 py-3 rounded-lg text-base"
                 style={{ background: 'var(--bg-soft)', border: '1px solid var(--line)', color: 'var(--ink)' }}
               />
