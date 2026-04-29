@@ -151,6 +151,8 @@ function GlobalStyles() {
 function Home({ onJoin }) {
   const [tab, setTab] = useState('create');
   const [name, setName] = useState('');
+  const [roomName, setRoomName] = useState('');
+  const [hostVotes, setHostVotes] = useState(true);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -177,11 +179,12 @@ function Home({ onJoin }) {
         const roomId = genRoomId();
         const userId = genUserId();
         const newRoom = {
+          name: roomName.trim(),
           hostId: userId,
           participants: {
             [userId]: {
               name: name.trim(), vote: null, hasVoted: false,
-              isObserver: false, joinedAt: Date.now(),
+              isObserver: !hostVotes, joinedAt: Date.now(),
             },
           },
           revealed: false,
@@ -277,9 +280,24 @@ function Home({ onJoin }) {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {tab === 'create' && !invitedRoom && (
+              <div className="fade-up">
+                <label className="block text-[11px] uppercase tracking-[0.15em] mb-2 font-semibold"
+                       style={{ color: 'var(--ink-2)' }}>Nom de la salle</label>
+                <input
+                  type="text" value={roomName} onChange={(e) => setRoomName(e.target.value)}
+                  placeholder="Sprint 42 — Refinement" maxLength={60}
+                  className="w-full px-4 py-3 rounded-lg text-base"
+                  style={{ background: 'var(--bg-soft)', border: '1px solid var(--line)', color: 'var(--ink)' }}
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-[11px] uppercase tracking-[0.15em] mb-2 font-semibold"
-                     style={{ color: 'var(--ink-2)' }}>Votre nom</label>
+                     style={{ color: 'var(--ink-2)' }}>
+                {tab === 'create' && !invitedRoom ? "Votre nom (organisateur)" : 'Votre nom'}
+              </label>
               <input
                 type="text" value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="Ayawo" maxLength={30} autoFocus={!!invitedRoom}
@@ -287,6 +305,31 @@ function Home({ onJoin }) {
                 style={{ background: 'var(--bg-soft)', border: '1px solid var(--line)', color: 'var(--ink)' }}
               />
             </div>
+
+            {tab === 'create' && !invitedRoom && (
+              <label className="fade-up flex items-center justify-between gap-3 px-4 py-3 rounded-lg cursor-pointer"
+                     style={{ background: 'var(--bg-soft)', border: '1px solid var(--line)' }}>
+                <span className="text-sm" style={{ color: 'var(--ink-2)' }}>
+                  Je participe au vote
+                  <span className="block text-[11px] mt-0.5" style={{ color: 'var(--ink-3)' }}>
+                    {hostVotes ? "Vous apparaîtrez à la table." : "Vous animez sans voter — invisible à la table."}
+                  </span>
+                </span>
+                <span className="relative inline-block flex-shrink-0" style={{ width: 38, height: 22 }}>
+                  <input
+                    type="checkbox" checked={hostVotes}
+                    onChange={(e) => setHostVotes(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <span aria-hidden
+                        className="absolute inset-0 rounded-full transition-colors"
+                        style={{ background: hostVotes ? 'var(--accent)' : 'var(--line)' }} />
+                  <span aria-hidden
+                        className="absolute top-0.5 rounded-full bg-white transition-all"
+                        style={{ width: 18, height: 18, left: hostVotes ? 18 : 2, boxShadow: '0 1px 2px rgba(0,0,0,.18)' }} />
+                </span>
+              </label>
+            )}
 
             {tab === 'join' && !invitedRoom && (
               <div className="fade-up">
@@ -654,12 +697,13 @@ function Room({ roomId, userId, onLeave }) {
                  style={{ width: 36, height: 48, background: 'var(--bg-card)', border: '1px solid var(--line)' }}>
               <span style={{ color: 'var(--accent)', fontSize: 20 }}>♠</span>
             </div>
-            <div>
-              <h1 className="ff-display leading-none" style={{ fontWeight: 700, fontSize: '1.05rem' }}>
-                Planning Poker
+            <div className="min-w-0">
+              <h1 className="ff-display leading-none truncate"
+                  style={{ fontWeight: 700, fontSize: '1.05rem', maxWidth: '60vw' }}>
+                {roomState.name?.trim() || 'Planning Poker'}
               </h1>
               <p className="text-xs mt-0.5" style={{ color: 'var(--ink-3)' }}>
-                Tour {roomState.round}{isHost && ' · animateur'}
+                Tour {roomState.round}{isHost && ' · animateur'}{me.isObserver && ' (observateur)'}
               </p>
             </div>
           </div>
@@ -773,7 +817,7 @@ function Room({ roomId, userId, onLeave }) {
           </div>
 
           <div className="flex flex-wrap justify-center gap-4 sm:gap-6 mb-2">
-            {participants.map(([uid, p]) => (
+            {active.map(([uid, p]) => (
               <ParticipantTile
                 key={uid}
                 participant={p}
@@ -782,6 +826,11 @@ function Room({ roomId, userId, onLeave }) {
                 isMe={uid === userId}
               />
             ))}
+            {active.length === 0 && (
+              <p className="ff-italic italic py-6" style={{ color: 'var(--ink-3)' }}>
+                En attente de participants…
+              </p>
+            )}
           </div>
 
           {roomState.revealed && stats && stats.hasNumeric && (
@@ -799,7 +848,7 @@ function Room({ roomId, userId, onLeave }) {
         </div>
 
         {/* Voting deck */}
-        {!roomState.revealed && (
+        {!roomState.revealed && !me.isObserver && (
           <div className="space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-[11px] uppercase tracking-[0.2em] font-semibold" style={{ color: 'var(--ink-3)' }}>
