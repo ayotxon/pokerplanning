@@ -19,6 +19,8 @@ const TIMER_OPTIONS = [
   { label: '5 min',  value: 300 },
 ];
 const POLL_MS = 1500;
+// Set to '' to hide the donate button.
+const DONATE_URL = 'https://ko-fi.com/D1D21YOBOK';
 
 // ============================================================
 // Utils
@@ -251,7 +253,7 @@ function Home({ onJoin }) {
             </div>
           </div>
           <h1 className="ff-display tracking-tight" style={{ color: 'var(--ink)', fontWeight: 700, fontSize: '2.75rem', lineHeight: 1.05 }}>
-            Planning Poker
+            Poker Planning
           </h1>
           <p className="ff-italic mt-3 text-base" style={{ color: 'var(--ink-3)' }}>
             l'estimation collective, en bonne compagnie
@@ -747,7 +749,7 @@ function Room({ roomId, userId, onLeave }) {
             <div className="min-w-0">
               <h1 className="ff-display leading-none truncate"
                   style={{ fontWeight: 700, fontSize: '1.05rem', maxWidth: '60vw' }}>
-                {roomState.name?.trim() || 'Planning Poker'}
+                {roomState.name?.trim() || 'Poker '}
               </h1>
               <p className="text-xs mt-0.5" style={{ color: 'var(--ink-3)' }}>
                 Tour {roomState.round}{isHost && ' · animateur'}{me.isObserver && ' (observateur)'}
@@ -1064,18 +1066,36 @@ function GlobalFooter() {
   ].filter(i => i.value > 0) : [];
 
   return (
-    <div
-      className="text-center py-3 px-3 text-[10px] tracking-wide"
-      style={{ color: 'var(--ink-3)', opacity: 0.55 }}>
-      <span>Powered by </span>
-      <span className="ff-display" style={{ fontWeight: 600 }}>Ayawo AMEGANVI</span>
-      {items.map((i, idx) => (
-        <span key={i.label}>
-          <span className="mx-2">·</span>
-          <span className="ff-mono tabular">{fmt(i.value)}</span>
-          <span className="ml-1">{i.label}</span>
-        </span>
-      ))}
+    <div className="flex flex-col items-center gap-2 pb-4 pt-1">
+      {DONATE_URL && (
+        <a
+          href={DONATE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Soutenir le développement sur Ko-fi"
+          className="inline-block transition-transform hover:scale-[1.03]"
+        >
+          <img
+            src="https://storage.ko-fi.com/cdn/kofi3.png?v=6"
+            alt="Soutenir sur Ko-fi"
+            height="36"
+            style={{ height: 36, border: 0, display: 'block' }}
+          />
+        </a>
+      )}
+      <div
+        className="text-center px-3 text-[10px] tracking-wide"
+        style={{ color: 'var(--ink-3)', opacity: 0.55 }}>
+        <span>Powered by </span>
+        <span className="ff-display" style={{ fontWeight: 600 }}>Ayawo AMEGANVI</span>
+        {items.map((i) => (
+          <span key={i.label}>
+            <span className="mx-2">·</span>
+            <span className="ff-mono tabular">{fmt(i.value)}</span>
+            <span className="ml-1">{i.label}</span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
