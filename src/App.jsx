@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Users, Crown, Clock, Eye, Play, RotateCcw, Copy, Check,
   LogOut, Plus, UserPlus, Sparkles, AlertCircle,
-  ChevronDown, ChevronRight, Timer, Award,
+  ChevronDown, ChevronRight, Timer, Award, Share2, X,
 } from 'lucide-react';
+import QRCode from 'react-qr-code';
 import { fetchRoom, saveRoom, updateRoom, recordVisit } from './api.js';
 
 // ============================================================
@@ -447,6 +448,7 @@ function Room({ roomId, userId, onLeave }) {
   const [storyDraft, setStoryDraft] = useState('');
   const [storyEditing, setStoryEditing] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const lastUpdateRef = useRef(0);
   const revealLockRef = useRef(false);
 
@@ -602,6 +604,17 @@ function Room({ roomId, userId, onLeave }) {
     } catch {}
   }
 
+  async function handleShareLink() {
+    const url = `${window.location.origin}?room=${roomId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {}
+  }
+
+  const shareUrl = `${window.location.origin}?room=${roomId}`;
+
   return (
     <div className="min-h-screen grain">
       {/* Header */}
@@ -624,6 +637,15 @@ function Room({ roomId, userId, onLeave }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowShareModal(true)}
+              className="p-2 rounded-lg hover:opacity-70 flex items-center gap-2 text-sm font-medium"
+              style={{ background: 'var(--accent)', color: 'white' }}
+              title="Partager"
+            >
+              <Share2 size={18} />
+              <span className="hidden sm:inline">Partager</span>
+            </button>
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg"
                  style={{ background: 'var(--bg-card)', border: '1px solid var(--line)' }}>
               <span className="text-[10px] uppercase tracking-[0.15em] font-semibold" style={{ color: 'var(--ink-3)' }}>Salle</span>
@@ -825,6 +847,69 @@ function Room({ roomId, userId, onLeave }) {
           )}
         </div>
       </main>
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(26,22,20,0.5)' }}
+          onClick={() => setShowShareModal(false)}
+        >
+          <div 
+            className="rounded-2xl p-6 shadow-deep fade-up max-w-sm w-full"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--line)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="ff-display text-xl font-semibold" style={{ color: 'var(--ink)' }}>
+                Partager la salle
+              </h2>
+              <button 
+                onClick={() => setShowShareModal(false)}
+                className="p-1.5 rounded-lg hover:opacity-70"
+                style={{ color: 'var(--ink-3)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex justify-center mb-4 p-4 rounded-xl" style={{ background: 'white', border: '1px solid var(--line)' }}>
+              <QRCode 
+                value={shareUrl} 
+                size={180}
+                style={{ height: 'auto', maxWidth: '100%', width: '180px' }}
+                viewBox={`0 0 256 256`}
+              />
+            </div>
+            
+            <p className="text-center text-sm mb-4" style={{ color: 'var(--ink-3)' }}>
+              Scannez ce QR code ou utilisez le lien ci-dessous
+            </p>
+            
+            <div className="flex items-center gap-2 p-2 rounded-lg mb-4" style={{ background: 'var(--bg-soft)', border: '1px solid var(--line)' }}>
+              <input 
+                type="text" 
+                readOnly 
+                value={shareUrl}
+                className="flex-1 bg-transparent text-sm outline-none ff-mono"
+                style={{ color: 'var(--ink)' }}
+              />
+              <button 
+                onClick={handleShareLink}
+                className="p-2 rounded-lg flex items-center gap-1.5 text-sm font-medium"
+                style={{ background: copied ? 'var(--success)' : 'var(--accent)', color: 'white' }}
+              >
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+                {copied ? 'Copié !' : 'Copier'}
+              </button>
+            </div>
+            
+            <p className="text-center text-xs" style={{ color: 'var(--ink-3)' }}>
+              Code de la salle : <span className="ff-mono font-bold" style={{ color: 'var(--ink)' }}>{roomId}</span>
+            </p>
+          </div>
+        </div>
+      )}
 
       <footer className="text-center py-8 text-xs ff-italic italic" style={{ color: 'var(--ink-3)' }}>
         Partagez le code <span className="ff-mono not-italic font-semibold" style={{ color: 'var(--ink-2)' }}>{roomId}</span> avec votre équipe.
