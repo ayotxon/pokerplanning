@@ -922,27 +922,36 @@ function Room({ roomId, userId, onLeave }) {
 // Global footer (signature + visit counter)
 // ============================================================
 function GlobalFooter() {
-  const [count, setCount] = useState(null);
+  const [stats, setStats] = useState(null);
   const calledRef = useRef(false);
 
   useEffect(() => {
     if (calledRef.current) return;
     calledRef.current = true;
-    recordVisit().then(c => { if (c != null) setCount(c); });
+    recordVisit().then(s => { if (s) setStats(s); });
   }, []);
+
+  const fmt = (n) => Number(n || 0).toLocaleString('fr-FR');
+  const items = stats ? [
+    { label: 'visites', value: stats.visits },
+    { label: 'salles', value: stats.rooms },
+    { label: 'votes', value: stats.votes },
+    { label: 'personnes', value: stats.users },
+  ].filter(i => i.value > 0) : [];
 
   return (
     <div
-      className="text-center py-3 text-[10px] tracking-wide"
+      className="text-center py-3 px-3 text-[10px] tracking-wide"
       style={{ color: 'var(--ink-3)', opacity: 0.55 }}>
       <span>Powered by </span>
       <span className="ff-display" style={{ fontWeight: 600 }}>Ayawo AMEGANVI</span>
-      {count != null && (
-        <>
+      {items.map((i, idx) => (
+        <span key={i.label}>
           <span className="mx-2">·</span>
-          <span className="ff-mono tabular">{count.toLocaleString('fr-FR')} visites</span>
-        </>
-      )}
+          <span className="ff-mono tabular">{fmt(i.value)}</span>
+          <span className="ml-1">{i.label}</span>
+        </span>
+      ))}
     </div>
   );
 }

@@ -27,8 +27,17 @@ export async function recordVisit() {
   try {
     const res = await fetch('/api/visit', { method: 'POST' });
     if (!res.ok) return null;
-    const { count } = await res.json();
-    return typeof count === 'number' ? count : null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchStats() {
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
     return null;
   }
