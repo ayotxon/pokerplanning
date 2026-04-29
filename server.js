@@ -70,6 +70,30 @@ function pruneStale() {
 }
 setInterval(pruneStale, 60 * 60 * 1000);
 
+const ROOM_TTL_S = Math.floor(ROOM_TTL_MS / 1000);
+
+async function loadRoom(id) {
+  if (rooms.has(id)) return rooms.get(id);
+  if (!redis) return null;
+  try {
+    const data = await redis.get(`rooms:${id}`);
+    if (!data) return null;
+    const room = typeof data === 'string' ? JSON.parse(data) : data;
+    rooms.set(id, room);
+    return room;
+  } catch {
+    return null;
+  }
+}
+
+async function persistRoom(id, room) {
+  rooms.set(id, room);
+  if (!redis) return;
+  try {
+    await redis.set(`rooms:${id}`, JSON.stringify(room), { ex: ROOM_TTL_S });
+  } catch {}
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, rooms: rooms.size, redis: !!redis });
 });
@@ -83,18 +107,19 @@ app.post('/api/visit', async (_req, res) => {
   res.json(await getStats());
 });
 
-app.get('/api/rooms/:id', (req, res) => {
-  const room = rooms.get(req.params.id);
+app.get('/api/rooms/:id', async (req, res) => {
+  const room = await loadRoom(req.params.id);
   if (!room) return res.status(404).json({ error: 'not_found' });
   res.json(room);
 });
 
-app.put('/api/rooms/:id', (req, res) => {
+app.put('/api/rooms/:id', async (req, res) => {
   if (!req.body || typeof req.body !== 'object') {
     return res.status(400).json({ error: 'invalid_body' });
   }
   const id = req.params.id;
-  const isNew = !rooms.has(id);
+  const old = await loadRoom(id);
+  const isNew = !old;
 
   if (isNew && rooms.size >= MAX_ROOMS) {
     pruneStale();
@@ -103,9 +128,8 @@ app.put('/api/rooms/:id', (req, res) => {
     }
   }
 
-  const old = rooms.get(id);
   const next = req.body;
-  rooms.set(id, next);
+  await persistRoom(id, next);
   res.json({ ok: true });
 
   // Stat tracking — fire-and-forget after response.

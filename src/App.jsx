@@ -154,6 +154,19 @@ function Home({ onJoin }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [invitedRoom, setInvitedRoom] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const r = params.get('room');
+    if (!r) return;
+    const sanitized = r.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    if (!sanitized) return;
+    setTab('join');
+    setCode(sanitized);
+    setInvitedRoom(sanitized);
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
 
   async function handleSubmit(e) {
     e?.preventDefault();
@@ -228,25 +241,40 @@ function Home({ onJoin }) {
         {/* Card */}
         <div className="rounded-2xl p-7 shadow-card"
              style={{ background: 'var(--bg-card)', border: '1px solid var(--line)' }}>
-          {/* Tabs */}
-          <div className="flex gap-1 p-1 rounded-lg mb-6" style={{ background: 'var(--bg)' }}>
-            {[
-              { id: 'create', icon: <Plus size={16} />, label: 'Créer une salle' },
-              { id: 'join',   icon: <UserPlus size={16} />, label: 'Rejoindre' },
-            ].map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className="flex-1 py-2.5 px-3 rounded-md font-medium text-sm transition-all flex items-center justify-center gap-2"
-                style={{
-                  background: tab === t.id ? 'var(--bg-card)' : 'transparent',
-                  color: tab === t.id ? 'var(--ink)' : 'var(--ink-3)',
-                  boxShadow: tab === t.id ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-                }}>
-                {t.icon}{t.label}
-              </button>
-            ))}
-          </div>
+          {invitedRoom ? (
+            <div className="mb-5 fade-up text-center">
+              <div className="text-[10px] uppercase tracking-[0.2em] font-semibold mb-2" style={{ color: 'var(--ink-3)' }}>
+                Invitation
+              </div>
+              <div className="ff-display" style={{ fontWeight: 600, fontSize: '1.05rem', color: 'var(--ink)' }}>
+                Vous rejoignez la salle
+              </div>
+              <div className="ff-mono mt-2 inline-block px-4 py-2 rounded-lg"
+                   style={{ background: 'var(--bg-soft)', border: '1px solid var(--line)', color: 'var(--ink)',
+                            letterSpacing: '0.3em', fontWeight: 700, fontSize: '1.4rem' }}>
+                {invitedRoom}
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-1 p-1 rounded-lg mb-6" style={{ background: 'var(--bg)' }}>
+              {[
+                { id: 'create', icon: <Plus size={16} />, label: 'Créer une salle' },
+                { id: 'join',   icon: <UserPlus size={16} />, label: 'Rejoindre' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className="flex-1 py-2.5 px-3 rounded-md font-medium text-sm transition-all flex items-center justify-center gap-2"
+                  style={{
+                    background: tab === t.id ? 'var(--bg-card)' : 'transparent',
+                    color: tab === t.id ? 'var(--ink)' : 'var(--ink-3)',
+                    boxShadow: tab === t.id ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                  }}>
+                  {t.icon}{t.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -254,13 +282,13 @@ function Home({ onJoin }) {
                      style={{ color: 'var(--ink-2)' }}>Votre nom</label>
               <input
                 type="text" value={name} onChange={(e) => setName(e.target.value)}
-                placeholder="Ayawo" maxLength={30}
+                placeholder="Ayawo" maxLength={30} autoFocus={!!invitedRoom}
                 className="w-full px-4 py-3 rounded-lg text-base"
                 style={{ background: 'var(--bg-soft)', border: '1px solid var(--line)', color: 'var(--ink)' }}
               />
             </div>
 
-            {tab === 'join' && (
+            {tab === 'join' && !invitedRoom && (
               <div className="fade-up">
                 <label className="block text-[11px] uppercase tracking-[0.15em] mb-2 font-semibold"
                        style={{ color: 'var(--ink-2)' }}>Code de la salle</label>
