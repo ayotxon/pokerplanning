@@ -1066,37 +1066,46 @@ function GlobalFooter() {
   ].filter(i => i.value > 0) : [];
 
   return (
-    <div className="flex flex-col items-center gap-2 pb-4 pt-1">
-      {DONATE_URL && (
-        <a
-          href={DONATE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Soutenir le développement sur Ko-fi"
-          className="inline-block transition-transform hover:scale-[1.03]"
-        >
-          <img
-            src="https://storage.ko-fi.com/cdn/kofi3.png?v=6"
-            alt="Soutenir sur Ko-fi"
-            height="36"
-            style={{ height: 36, border: 0, display: 'block' }}
-          />
-        </a>
-      )}
-      <div
-        className="text-center px-3 text-[10px] tracking-wide"
-        style={{ color: 'var(--ink-3)', opacity: 0.55 }}>
-        <span>Powered by </span>
-        <span className="ff-display" style={{ fontWeight: 600 }}>Ayawo AMEGANVI</span>
-        {items.map((i) => (
-          <span key={i.label}>
-            <span className="mx-2">·</span>
-            <span className="ff-mono tabular">{fmt(i.value)}</span>
-            <span className="ml-1">{i.label}</span>
-          </span>
-        ))}
-      </div>
+    <div
+      className="text-center px-3 py-4 text-[10px] tracking-wide"
+      style={{ color: 'var(--ink-3)', opacity: 0.55 }}>
+      <span>Powered by </span>
+      <span className="ff-display" style={{ fontWeight: 600 }}>Ayawo AMEGANVI</span>
+      {items.map((i) => (
+        <span key={i.label}>
+          <span className="mx-2">·</span>
+          <span className="ff-mono tabular">{fmt(i.value)}</span>
+          <span className="ml-1">{i.label}</span>
+        </span>
+      ))}
     </div>
+  );
+}
+
+// ============================================================
+// Floating donate button (top-right)
+// ============================================================
+function DonateButton({ inRoom }) {
+  if (!DONATE_URL) return null;
+  // In Room on mobile, the sticky header has Share + Quit icons on the right,
+  // so we hide the badge below sm to avoid overlap.
+  const responsiveCls = inRoom ? 'hidden sm:inline-block' : 'inline-block';
+  return (
+    <a
+      href={DONATE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Soutenir le développement sur Ko-fi"
+      className={`${responsiveCls} fixed top-3 right-3 sm:top-4 sm:right-4 z-50 transition-transform hover:scale-[1.04]`}
+      style={{ filter: 'drop-shadow(0 4px 10px rgba(26,22,20,0.18))' }}
+    >
+      <img
+        src="https://storage.ko-fi.com/cdn/kofi3.png?v=6"
+        alt="Soutenir sur Ko-fi"
+        height="36"
+        style={{ height: 36, border: 0, display: 'block' }}
+      />
+    </a>
   );
 }
 
@@ -1192,6 +1201,7 @@ export default function App() {
           onLeave={handleLeave}
         />
       )}
+      {view !== 'booting' && <DonateButton inRoom={view === 'room'} />}
       <GlobalFooter />
     </>
   );
