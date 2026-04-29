@@ -54,6 +54,14 @@ function computeStats(participants) {
   const modeEntry = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
   const closest = FIB.reduce((p, c) => Math.abs(c - avg) < Math.abs(p - avg) ? c : p);
   const allSame = sorted.every(v => v === sorted[0]) && voters.length > 1;
+  // Agreement level — based on distance between Fibonacci indexes of min and max.
+  // 0 → consensus, 1–2 → aligned, ≥3 → diverging.
+  const idxMin = FIB.indexOf(min);
+  const idxMax = FIB.indexOf(max);
+  const fibSpread = (idxMin >= 0 && idxMax >= 0) ? (idxMax - idxMin) : 0;
+  let agreement = 'aligned';
+  if (allSame) agreement = 'consensus';
+  else if (fibSpread >= 3) agreement = 'diverging';
   return {
     hasNumeric: true,
     count: voters.length,
@@ -62,6 +70,8 @@ function computeStats(participants) {
     min, max,
     mode: modeEntry[0],
     consensus: allSame,
+    agreement,
+    fibSpread,
     suggested: closest,
     distribution: counts,
   };
@@ -90,6 +100,11 @@ function GlobalStyles() {
         --gold: #B89855;
         --gold-soft: #D4B97D;
         --success: #587442;
+        --success-soft: #7E9663;
+        --success-tint: #E8F0DD;
+        --warning: #B85537;
+        --warning-soft: #D17B5C;
+        --warning-tint: #FCE6DB;
       }
 
       body {
@@ -119,9 +134,11 @@ function GlobalStyles() {
       @keyframes flipIn { from { transform: rotateY(180deg); opacity: 0 } to { transform: rotateY(0); opacity: 1 } }
       @keyframes fadeUp { from { transform: translateY(8px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
       @keyframes pulseGold { 0%,100% { box-shadow: 0 0 0 0 rgba(184,152,85,0.45) } 50% { box-shadow: 0 0 0 10px rgba(184,152,85,0) } }
-      .flip-in   { animation: flipIn .55s cubic-bezier(.4,0,.2,1); }
-      .fade-up   { animation: fadeUp .35s ease-out; }
-      .pulse-gold{ animation: pulseGold 2s infinite; }
+      @keyframes pulseSuccess { 0%,100% { box-shadow: 0 0 0 0 rgba(88,116,66,0.45) } 50% { box-shadow: 0 0 0 10px rgba(88,116,66,0) } }
+      .flip-in       { animation: flipIn .55s cubic-bezier(.4,0,.2,1); }
+      .fade-up       { animation: fadeUp .35s ease-out; }
+      .pulse-gold    { animation: pulseGold 2s infinite; }
+      .pulse-success { animation: pulseSuccess 2s infinite; }
 
       .shadow-card { box-shadow: 0 1px 2px rgba(26,22,20,.06), 0 4px 16px rgba(26,22,20,.06), 0 18px 36px rgba(26,22,20,.04); }
       .shadow-deep { box-shadow: 0 2px 4px rgba(26,22,20,.08), 0 10px 28px rgba(26,22,20,.10), 0 28px 56px rgba(26,22,20,.06); }
@@ -444,14 +461,18 @@ function ParticipantTile({ participant, isHost, revealed, isMe }) {
 // ============================================================
 // Stat card + Results
 // ============================================================
-function StatCard({ label, value, highlight, icon }) {
+const STAT_VARIANTS = {
+  default: { bg: 'var(--bg-card)', fg: 'var(--ink)',  border: 'var(--line)' },
+  accent:  { bg: 'var(--accent)',  fg: 'white',       border: 'var(--accent)' },
+  success: { bg: 'var(--success)', fg: 'white',       border: 'var(--success)' },
+  warning: { bg: 'var(--warning)', fg: 'white',       border: 'var(--warning)' },
+};
+
+function StatCard({ label, value, variant = 'default', icon }) {
+  const v = STAT_VARIANTS[variant] || STAT_VARIANTS.default;
   return (
     <div className="rounded-lg p-3"
-         style={{
-           background: highlight ? 'var(--accent)' : 'var(--bg-card)',
-           color: highlight ? 'white' : 'var(--ink)',
-           border: `1px solid ${highlight ? 'var(--accent)' : 'var(--line)'}`,
-         }}>
+         style={{ background: v.bg, color: v.fg, border: `1px solid ${v.border}` }}>
       <div className="text-[10px] uppercase tracking-[0.15em] flex items-center gap-1 mb-1 font-semibold" style={{ opacity: .7 }}>
         {icon}{label}
       </div>
@@ -463,14 +484,31 @@ function StatCard({ label, value, highlight, icon }) {
 }
 
 function ResultsPanel({ stats }) {
+  const { agreement } = stats;
+  const isConsensus = agreement === 'consensus';
+  const isDiverging = agreement === 'diverging';
+
+  const estimationVariant = isConsensus ? 'success' : isDiverging ? 'warning' : 'accent';
+  const spreadVariant     = isDiverging ? 'warning' : 'default';
+  const modeBg            = isConsensus ? 'var(--success)' : isDiverging ? 'var(--warning)' : 'var(--accent)';
+
   return (
     <div className="space-y-5 fade-up">
-      {stats.consensus && (
-        <div className="text-center py-3 rounded-lg flex items-center justify-center gap-2 pulse-gold"
-             style={{ background: 'rgba(184,152,85,0.12)', color: 'var(--gold)', border: '1px solid var(--gold-soft)' }}>
+      {isConsensus && (
+        <div className="text-center py-3 rounded-lg flex items-center justify-center gap-2 pulse-success"
+             style={{ background: 'var(--success-tint)', color: 'var(--success)', border: '1px solid var(--success-soft)' }}>
           <Sparkles size={18} />
           <span className="ff-display" style={{ fontWeight: 600, fontSize: '1.05rem' }}>
             Consensus parfait — l'équipe est alignée.
+          </span>
+        </div>
+      )}
+      {isDiverging && (
+        <div className="text-center py-3 px-4 rounded-lg flex items-center justify-center gap-2"
+             style={{ background: 'var(--warning-tint)', color: 'var(--warning)', border: '1px solid var(--warning-soft)' }}>
+          <AlertCircle size={18} />
+          <span className="ff-display" style={{ fontWeight: 600, fontSize: '1.05rem' }}>
+            Estimations divergentes — discutez avant d'arrêter une valeur.
           </span>
         </div>
       )}
@@ -478,8 +516,17 @@ function ResultsPanel({ stats }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Moyenne" value={stats.avg} />
         <StatCard label="Médiane" value={stats.median} />
-        <StatCard label="Étendue" value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`} />
-        <StatCard label="Estimation" value={stats.suggested} highlight icon={<Award size={12} />} />
+        <StatCard
+          label="Étendue"
+          value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`}
+          variant={spreadVariant}
+        />
+        <StatCard
+          label="Estimation"
+          value={stats.suggested}
+          variant={estimationVariant}
+          icon={<Award size={12} />}
+        />
       </div>
 
       <div>
@@ -493,9 +540,9 @@ function ResultsPanel({ stats }) {
               <div key={vote}
                    className="px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm"
                    style={{
-                     background: isMode ? 'var(--accent)' : 'var(--bg-card)',
+                     background: isMode ? modeBg : 'var(--bg-card)',
                      color: isMode ? 'white' : 'var(--ink-2)',
-                     border: `1px solid ${isMode ? 'var(--accent)' : 'var(--line)'}`,
+                     border: `1px solid ${isMode ? modeBg : 'var(--line)'}`,
                    }}>
                 <span className="ff-mono font-bold">{vote}</span>
                 <span className="text-xs" style={{ opacity: .7 }}>×{count}</span>
