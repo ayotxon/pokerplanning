@@ -1083,11 +1083,54 @@ function GlobalFooter() {
 // ============================================================
 // App
 // ============================================================
+const SESSION_KEY = 'pp.session';
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (s && typeof s.roomId === 'string' && typeof s.userId === 'string') return s;
+  } catch {}
+  return null;
+}
+function saveSession(s) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch {}
+}
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
+}
+
 export default function App() {
-  const [view, setView] = useState('home');
+  const [view, setView] = useState('booting'); // 'booting' | 'home' | 'room'
   const [session, setSession] = useState(null);
 
+  // Boot: try to restore session from localStorage.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const inviteRoom = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const saved = loadSession();
+      // If user is being invited to a different room, drop the saved session
+      // and let Home handle the invite flow.
+      if (saved && (!inviteRoom || inviteRoom === saved.roomId)) {
+        const room = await fetchRoom(saved.roomId);
+        if (cancelled) return;
+        if (room && room.participants && room.participants[saved.userId]) {
+          setSession(saved);
+          setView('room');
+          return;
+        }
+        clearSession();
+      }
+      if (!cancelled) setView('home');
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   function handleJoin(data) {
+    saveSession(data);
     setSession(data);
     setView('room');
   }
@@ -1105,6 +1148,7 @@ export default function App() {
         });
       } catch {}
     }
+    clearSession();
     setSession(null);
     setView('home');
   }
@@ -1112,13 +1156,22 @@ export default function App() {
   return (
     <>
       <GlobalStyles />
-      {view === 'home'
-        ? <Home onJoin={handleJoin} />
-        : <Room
-            roomId={session.roomId}
-            userId={session.userId}
-            onLeave={handleLeave}
-          />}
+      {view === 'booting' && (
+        <div className="min-h-screen flex items-center justify-center grain">
+          <div className="text-center">
+            <div className="text-4xl animate-pulse mb-3" style={{ color: 'var(--accent)' }}>♠</div>
+            <p className="ff-italic" style={{ color: 'var(--ink-3)' }}>Reprise de la partie…</p>
+          </div>
+        </div>
+      )}
+      {view === 'home' && <Home onJoin={handleJoin} />}
+      {view === 'room' && session && (
+        <Room
+          roomId={session.roomId}
+          userId={session.userId}
+          onLeave={handleLeave}
+        />
+      )}
       <GlobalFooter />
     </>
   );
