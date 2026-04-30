@@ -71,6 +71,7 @@ async function callOp(roomId, op) {
 
 export const castVote   = (roomId, userId, value)        => callOp(roomId, { type: 'vote', userId, value });
 export const revealRoom = (roomId)                       => callOp(roomId, { type: 'reveal' });
+export const revote     = (roomId)                       => callOp(roomId, { type: 'revote' });
 export const newRound   = (roomId)                       => callOp(roomId, { type: 'round' });
 export const startTimer = (roomId, duration)             => callOp(roomId, { type: 'timer', duration });
 export const setStory   = (roomId, story)                => callOp(roomId, { type: 'story', story });

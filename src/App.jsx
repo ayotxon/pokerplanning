@@ -3,11 +3,12 @@ import {
   Users, Crown, Clock, Eye, Play, RotateCcw, Copy, Check,
   LogOut, Plus, UserPlus, Sparkles, AlertCircle,
   ChevronDown, ChevronRight, Timer, Award, Share2, X,
+  RotateCw, BookOpen,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import {
   fetchRoom, saveRoom, updateRoom, recordVisit,
-  castVote, revealRoom, newRound, startTimer, setStory, leaveRoom, joinRoom,
+  castVote, revealRoom, revote, newRound, startTimer, setStory, leaveRoom, joinRoom,
 } from './api.js';
 
 // ============================================================
@@ -606,13 +607,13 @@ function Room({ roomId, userId, onLeave }) {
     return () => clearInterval(i);
   }, []);
 
-  // Auto-reveal
+  // Auto-reveal on timer expiration only.
+  // The "everyone voted" case is handled atomically server-side inside the
+  // vote op — doing it here would race against the very vote that triggered it.
   useEffect(() => {
     if (!roomState || roomState.revealed || revealLockRef.current) return;
-    const ps = Object.values(roomState.participants).filter(p => !p.isObserver);
-    const allVoted = ps.length > 0 && ps.every(p => p.hasVoted);
     const timerExpired = roomState.timerEnd && now >= roomState.timerEnd;
-    if (allVoted || timerExpired) {
+    if (timerExpired) {
       revealLockRef.current = true;
       revealRoom(roomId).finally(() => {
         setTimeout(() => { revealLockRef.current = false; }, 2000);
@@ -663,6 +664,7 @@ function Room({ roomId, userId, onLeave }) {
   }
 
   const isHost = roomState.hostId === userId;
+  const hostName = roomState.participants?.[roomState.hostId]?.name || null;
   const participants = Object.entries(roomState.participants);
   const active = participants.filter(([, p]) => !p.isObserver);
   const votedCount = active.filter(([, p]) => p.hasVoted).length;
@@ -689,6 +691,10 @@ function Room({ roomId, userId, onLeave }) {
 
   async function handleNewRound() {
     await newRound(roomId);
+  }
+
+  async function handleRevote() {
+    await revote(roomId);
   }
 
   async function handleStartTimer(duration) {
@@ -736,8 +742,12 @@ function Room({ roomId, userId, onLeave }) {
                   style={{ fontWeight: 700, fontSize: '1.05rem', maxWidth: '60vw' }}>
                 {roomState.name?.trim() || 'Poker '}
               </h1>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--ink-3)' }}>
-                Tour {roomState.round}{isHost && ' · animateur'}{me.isObserver && ' (observateur)'}
+              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--ink-3)', maxWidth: '60vw' }}>
+                Tour {roomState.round}
+                {' · '}
+                {isHost
+                  ? (me.isObserver ? 'vous animez (observateur)' : 'vous animez')
+                  : (hostName ? `animé par ${hostName}` : 'sans animateur')}
               </p>
             </div>
           </div>
@@ -942,6 +952,13 @@ function Room({ roomId, userId, onLeave }) {
               </button>
             </>
           )}
+          {isHost && roomState.revealed && stats?.agreement && stats.agreement !== 'consensus' && (
+            <button onClick={handleRevote}
+                    className="btn-ghost px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2">
+              <RotateCw size={16} />
+              Revoter sur ce sujet
+            </button>
+          )}
           {isHost && roomState.revealed && (
             <button onClick={handleNewRound}
                     className="btn-primary px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2">
@@ -957,6 +974,42 @@ function Room({ roomId, userId, onLeave }) {
             </p>
           )}
         </div>
+
+        {/* History of finalized estimations */}
+        {Array.isArray(roomState.history) && roomState.history.length > 0 && (
+          <div className="space-y-2 fade-up">
+            <h2 className="text-[11px] uppercase tracking-[0.2em] font-semibold flex items-center gap-2" style={{ color: 'var(--ink-3)' }}>
+              <BookOpen size={12} /> Historique des estimations
+              <span className="ff-mono normal-case tracking-normal" style={{ opacity: 0.6 }}>
+                · {roomState.history.length}
+              </span>
+            </h2>
+            <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--line)' }}>
+              {roomState.history.slice().reverse().map((entry, i, arr) => (
+                <div key={`${entry.round}-${entry.revealedAt}`}
+                     className="flex items-center gap-3 px-3 py-2.5"
+                     style={{ borderTop: i > 0 ? '1px solid var(--line)' : 'none' }}>
+                  <span className="ff-mono text-[10px] flex-shrink-0 px-2 py-0.5 rounded"
+                        style={{ background: 'var(--bg-soft)', color: 'var(--ink-3)' }}>
+                    #{entry.round}
+                  </span>
+                  <span className="text-sm flex-1 truncate" style={{ color: 'var(--ink)' }}>
+                    {entry.story
+                      ? entry.story
+                      : <span className="ff-italic italic" style={{ color: 'var(--ink-3)' }}>Sans titre</span>}
+                  </span>
+                  <span className="ff-display flex-shrink-0 px-2.5 py-0.5 rounded-md"
+                        style={{
+                          fontWeight: 700, fontSize: '1.05rem',
+                          background: 'var(--accent)', color: 'white',
+                        }}>
+                    {entry.suggested != null ? entry.suggested : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Share Modal */}

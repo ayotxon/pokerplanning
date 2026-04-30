@@ -121,6 +121,15 @@ async function applyOp(id, op) {
       room.participants[userId].vote = value;
       room.participants[userId].hasVoted = true;
       if (!wasVoted) voteIncrement = 1;
+      // Atomic auto-reveal: if every non-observer participant has voted,
+      // flip revealed in the same op. This avoids the client-side race where
+      // a separate reveal call would clobber the very vote that triggered it.
+      const ps = Object.values(room.participants).filter(p => !p.isObserver);
+      const allVoted = ps.length > 0 && ps.every(p => p.hasVoted);
+      if (allVoted) {
+        room.revealed = true;
+        room.timerEnd = null;
+      }
       stamp();
       break;
     }
@@ -132,7 +141,46 @@ async function applyOp(id, op) {
       }
       break;
     }
+    case 'revote': {
+      if (room.revealed) {
+        room.revealed = false;
+        room.timerEnd = null;
+        Object.keys(room.participants || {}).forEach(uid => {
+          room.participants[uid].vote = null;
+          room.participants[uid].hasVoted = false;
+        });
+        stamp();
+      }
+      break;
+    }
     case 'round': {
+      // Capture history snapshot before clearing — only if a reveal happened
+      // and at least one non-observer voted.
+      if (room.revealed) {
+        const ps = Object.values(room.participants || {}).filter(p => !p.isObserver);
+        const voted = ps.filter(p => p.hasVoted);
+        if (voted.length > 0) {
+          const numeric = voted.filter(p => !isNaN(parseFloat(p.vote))).map(p => parseFloat(p.vote));
+          let suggested = null;
+          if (numeric.length > 0) {
+            const FIB = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+            const avg = numeric.reduce((a, b) => a + b, 0) / numeric.length;
+            suggested = FIB.reduce((p, c) => Math.abs(c - avg) < Math.abs(p - avg) ? c : p);
+          }
+          const votesByName = {};
+          for (const p of voted) votesByName[p.name] = p.vote;
+          const entry = {
+            round: room.round || 1,
+            story: room.story || '',
+            suggested,
+            votes: votesByName,
+            revealedAt: Date.now(),
+          };
+          room.history = Array.isArray(room.history) ? room.history : [];
+          room.history.push(entry);
+          if (room.history.length > 50) room.history = room.history.slice(-50);
+        }
+      }
       room.revealed = false;
       room.timerEnd = null;
       room.round = (room.round || 1) + 1;
