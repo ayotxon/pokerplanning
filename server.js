@@ -94,6 +94,29 @@ async function persistRoom(id, room) {
   } catch {}
 }
 
+const FIB = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+const ESTIMATE_SOURCES = ['avg', 'median', 'suggested'];
+
+// Computes a final estimate value from current votes, given a source preference.
+// Returns null when there are no numeric votes.
+function computeEstimate(participants, source) {
+  const voted = Object.values(participants || {})
+    .filter(p => !p.isObserver && p.hasVoted && p.vote != null);
+  const numeric = voted.filter(p => !isNaN(parseFloat(p.vote))).map(p => parseFloat(p.vote));
+  if (numeric.length === 0) return null;
+  const sorted = [...numeric].sort((a, b) => a - b);
+  const sum = numeric.reduce((a, b) => a + b, 0);
+  const avg = sum / numeric.length;
+  const median = sorted.length % 2 === 0
+    ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+    : sorted[Math.floor(sorted.length / 2)];
+  const round1 = (n) => Number.isInteger(n) ? n : Number(n.toFixed(1));
+  if (source === 'avg') return round1(avg);
+  if (source === 'median') return round1(median);
+  // 'suggested' (default): nearest Fibonacci to average
+  return FIB.reduce((p, c) => Math.abs(c - avg) < Math.abs(p - avg) ? c : p);
+}
+
 // Per-room serialization queue. Operations on the same room run one after another,
 // preventing concurrent reads/writes from clobbering each other.
 const roomQueues = new Map();
@@ -157,22 +180,18 @@ async function applyOp(id, op) {
       // Capture history snapshot before clearing — only if a reveal happened
       // and at least one non-observer voted.
       if (room.revealed) {
-        const ps = Object.values(room.participants || {}).filter(p => !p.isObserver);
-        const voted = ps.filter(p => p.hasVoted);
+        const voted = Object.values(room.participants || {})
+          .filter(p => !p.isObserver && p.hasVoted);
         if (voted.length > 0) {
-          const numeric = voted.filter(p => !isNaN(parseFloat(p.vote))).map(p => parseFloat(p.vote));
-          let suggested = null;
-          if (numeric.length > 0) {
-            const FIB = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
-            const avg = numeric.reduce((a, b) => a + b, 0) / numeric.length;
-            suggested = FIB.reduce((p, c) => Math.abs(c - avg) < Math.abs(p - avg) ? c : p);
-          }
+          const source = ESTIMATE_SOURCES.includes(room.chosenSource) ? room.chosenSource : 'suggested';
+          const value = computeEstimate(room.participants, source);
           const votesByName = {};
           for (const p of voted) votesByName[p.name] = p.vote;
           const entry = {
             round: room.round || 1,
             story: room.story || '',
-            suggested,
+            suggested: value,
+            source,
             votes: votesByName,
             revealedAt: Date.now(),
           };
@@ -184,10 +203,40 @@ async function applyOp(id, op) {
       room.revealed = false;
       room.timerEnd = null;
       room.round = (room.round || 1) + 1;
+      room.chosenSource = null;
       Object.keys(room.participants || {}).forEach(uid => {
         room.participants[uid].vote = null;
         room.participants[uid].hasVoted = false;
       });
+      stamp();
+      break;
+    }
+    case 'setEstimateSource': {
+      room.chosenSource = ESTIMATE_SOURCES.includes(op.source) ? op.source : null;
+      stamp();
+      break;
+    }
+    case 'historyUpdate': {
+      const idx = Number(op.index);
+      if (!Array.isArray(room.history) || idx < 0 || idx >= room.history.length) {
+        return { status: 400, error: 'invalid_index' };
+      }
+      const entry = room.history[idx];
+      if (typeof op.story === 'string') {
+        entry.story = op.story.slice(0, 500);
+      }
+      if (op.suggested !== undefined) {
+        const v = op.suggested;
+        if (v === null) {
+          entry.suggested = null;
+        } else if (typeof v === 'number') {
+          entry.suggested = Number.isFinite(v) ? v : null;
+        } else {
+          // accept short strings like "5", "5.5", "?", "☕"
+          const s = String(v).slice(0, 16).trim();
+          entry.suggested = s ? s : null;
+        }
+      }
       stamp();
       break;
     }
