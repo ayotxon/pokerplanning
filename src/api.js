@@ -52,3 +52,27 @@ export async function updateRoom(roomId, updater) {
   const ok = await saveRoom(roomId, next);
   return ok ? next : null;
 }
+
+// Atomic, server-serialized operations (race-free).
+async function callOp(roomId, op) {
+  try {
+    const res = await fetch(`${BASE}/${encodeURIComponent(roomId)}/op`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(op),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.room || null;
+  } catch {
+    return null;
+  }
+}
+
+export const castVote   = (roomId, userId, value)        => callOp(roomId, { type: 'vote', userId, value });
+export const revealRoom = (roomId)                       => callOp(roomId, { type: 'reveal' });
+export const newRound   = (roomId)                       => callOp(roomId, { type: 'round' });
+export const startTimer = (roomId, duration)             => callOp(roomId, { type: 'timer', duration });
+export const setStory   = (roomId, story)                => callOp(roomId, { type: 'story', story });
+export const leaveRoom  = (roomId, userId)               => callOp(roomId, { type: 'leave', userId });
+export const joinRoom   = (roomId, userId, profile)      => callOp(roomId, { type: 'join', userId, profile });

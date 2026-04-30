@@ -5,7 +5,10 @@ import {
   ChevronDown, ChevronRight, Timer, Award, Share2, X,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
-import { fetchRoom, saveRoom, updateRoom, recordVisit } from './api.js';
+import {
+  fetchRoom, saveRoom, updateRoom, recordVisit,
+  castVote, revealRoom, newRound, startTimer, setStory, leaveRoom, joinRoom,
+} from './api.js';
 
 // ============================================================
 // Constants
@@ -236,20 +239,7 @@ function Home({ onJoin }) {
         const room = await fetchRoom(roomId);
         if (!room) { setError("Cette salle n'existe pas. Vérifiez le code."); setLoading(false); return; }
         const userId = getOrCreateUserId();
-        const updated = await updateRoom(roomId, (r) => {
-          const existing = r.participants[userId] || {};
-          // The original creator reclaims host on rejoin.
-          const isCreator = r.creatorId && r.creatorId === userId;
-          if (isCreator) r.hostId = userId;
-          r.participants[userId] = {
-            name: name.trim(),
-            vote: existing.vote ?? null,
-            hasVoted: existing.hasVoted ?? false,
-            isObserver: existing.isObserver ?? false,
-            joinedAt: existing.joinedAt || Date.now(),
-          };
-          return r;
-        });
+        const updated = await joinRoom(roomId, userId, { name: name.trim() });
         if (!updated) throw new Error('join_failed');
         onJoin({ roomId, userId, userName: name.trim() });
       }
@@ -624,12 +614,7 @@ function Room({ roomId, userId, onLeave }) {
     const timerExpired = roomState.timerEnd && now >= roomState.timerEnd;
     if (allVoted || timerExpired) {
       revealLockRef.current = true;
-      updateRoom(roomId, (r) => {
-        if (r.revealed) return r;
-        r.revealed = true;
-        r.timerEnd = null;
-        return r;
-      }).finally(() => {
+      revealRoom(roomId).finally(() => {
         setTimeout(() => { revealLockRef.current = false; }, 2000);
       });
     }
@@ -695,45 +680,25 @@ function Room({ roomId, userId, onLeave }) {
         [userId]: { ...prev.participants[userId], vote: value, hasVoted: true },
       },
     }));
-    await updateRoom(roomId, (r) => {
-      if (r.participants[userId]) {
-        r.participants[userId].vote = value;
-        r.participants[userId].hasVoted = true;
-      }
-      return r;
-    });
+    await castVote(roomId, userId, value);
   }
 
   async function handleReveal() {
-    await updateRoom(roomId, (r) => {
-      r.revealed = true; r.timerEnd = null; return r;
-    });
+    await revealRoom(roomId);
   }
 
   async function handleNewRound() {
-    await updateRoom(roomId, (r) => {
-      r.revealed = false; r.timerEnd = null;
-      r.round = (r.round || 1) + 1;
-      Object.keys(r.participants).forEach(uid => {
-        r.participants[uid].vote = null;
-        r.participants[uid].hasVoted = false;
-      });
-      return r;
-    });
+    await newRound(roomId);
   }
 
   async function handleStartTimer(duration) {
     setShowTimerMenu(false);
-    await updateRoom(roomId, (r) => {
-      r.timerDuration = duration;
-      r.timerEnd = Date.now() + duration * 1000;
-      return r;
-    });
+    await startTimer(roomId, duration);
   }
 
   async function handleSaveStory() {
     setStoryEditing(false);
-    await updateRoom(roomId, (r) => { r.story = storyDraft.trim(); return r; });
+    await setStory(roomId, storyDraft.trim());
   }
 
   async function handleCopy() {
@@ -1186,16 +1151,7 @@ export default function App() {
 
   async function handleLeave() {
     if (session) {
-      try {
-        await updateRoom(session.roomId, (r) => {
-          delete r.participants[session.userId];
-          if (r.hostId === session.userId) {
-            const remaining = Object.keys(r.participants);
-            r.hostId = remaining[0] || session.userId;
-          }
-          return r;
-        });
-      } catch {}
+      try { await leaveRoom(session.roomId, session.userId); } catch {}
     }
     clearSession();
     setSession(null);
