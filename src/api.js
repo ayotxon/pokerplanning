@@ -77,5 +77,3 @@ export const startTimer = (roomId, duration)             => callOp(roomId, { typ
 export const setStory   = (roomId, story)                => callOp(roomId, { type: 'story', story });
 export const leaveRoom  = (roomId, userId)               => callOp(roomId, { type: 'leave', userId });
 export const joinRoom   = (roomId, userId, profile)      => callOp(roomId, { type: 'join', userId, profile });
-export const setEstimateSource = (roomId, source)         => callOp(roomId, { type: 'setEstimateSource', source });
-export const updateHistory     = (roomId, index, patch)   => callOp(roomId, { type: 'historyUpdate', index, ...patch });

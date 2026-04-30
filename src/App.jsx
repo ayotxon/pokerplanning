@@ -3,13 +3,12 @@ import {
   Users, Crown, Clock, Eye, Play, RotateCcw, Copy, Check,
   LogOut, Plus, UserPlus, Sparkles, AlertCircle,
   ChevronDown, ChevronRight, Timer, Award, Share2, X,
-  RotateCw, BookOpen, Pencil,
+  RotateCw, BookOpen,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import {
   fetchRoom, saveRoom, updateRoom, recordVisit,
   castVote, revealRoom, revote, newRound, startTimer, setStory, leaveRoom, joinRoom,
-  setEstimateSource, updateHistory,
 } from './api.js';
 
 // ============================================================
@@ -482,38 +481,22 @@ const STAT_VARIANTS = {
   warning: { bg: 'var(--warning)', fg: 'white',       border: 'var(--warning)' },
 };
 
-function StatCard({ label, value, variant = 'default', icon, onClick, selected, badge }) {
+function StatCard({ label, value, variant = 'default', icon }) {
   const v = STAT_VARIANTS[variant] || STAT_VARIANTS.default;
-  const interactive = typeof onClick === 'function';
   return (
-    <button
-      type="button"
-      onClick={interactive ? onClick : undefined}
-      disabled={!interactive}
-      className={`rounded-lg p-3 text-left relative ${interactive ? 'transition-transform hover:-translate-y-0.5 cursor-pointer' : 'cursor-default'}`}
-      style={{
-        background: v.bg, color: v.fg,
-        border: `1px solid ${v.border}`,
-        outline: selected ? `2px solid ${v.border}` : 'none',
-        outlineOffset: selected ? '2px' : '0',
-      }}>
+    <div className="rounded-lg p-3"
+         style={{ background: v.bg, color: v.fg, border: `1px solid ${v.border}` }}>
       <div className="text-[10px] uppercase tracking-[0.15em] flex items-center gap-1 mb-1 font-semibold" style={{ opacity: .7 }}>
         {icon}{label}
-        {badge && (
-          <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider"
-                style={{ background: 'rgba(255,255,255,0.22)' }}>
-            <Check size={9} strokeWidth={3} /> CHOISI
-          </span>
-        )}
       </div>
       <div className="ff-display tabular" style={{ fontWeight: 600, fontSize: '1.6rem', lineHeight: 1 }}>
         {value}
       </div>
-    </button>
+    </div>
   );
 }
 
-function ResultsPanel({ stats, isHost, chosenSource, onSelectSource }) {
+function ResultsPanel({ stats }) {
   const { agreement } = stats;
   const isConsensus = agreement === 'consensus';
   const isDiverging = agreement === 'diverging';
@@ -521,9 +504,6 @@ function ResultsPanel({ stats, isHost, chosenSource, onSelectSource }) {
   const estimationVariant = isConsensus ? 'success' : isDiverging ? 'warning' : 'accent';
   const spreadVariant     = isDiverging ? 'warning' : 'default';
   const modeBg            = isConsensus ? 'var(--success)' : isDiverging ? 'var(--warning)' : 'var(--accent)';
-
-  const activeSource = chosenSource || 'suggested';
-  const handlePick = (source) => () => { if (isHost && onSelectSource) onSelectSource(source); };
 
   return (
     <div className="space-y-5 fade-up">
@@ -546,44 +526,20 @@ function ResultsPanel({ stats, isHost, chosenSource, onSelectSource }) {
         </div>
       )}
 
-      <div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard
-            label="Moyenne"
-            value={stats.avg}
-            variant={activeSource === 'avg' ? estimationVariant : 'default'}
-            onClick={isHost ? handlePick('avg') : undefined}
-            selected={activeSource === 'avg'}
-            badge={activeSource === 'avg'}
-          />
-          <StatCard
-            label="Médiane"
-            value={stats.median}
-            variant={activeSource === 'median' ? estimationVariant : 'default'}
-            onClick={isHost ? handlePick('median') : undefined}
-            selected={activeSource === 'median'}
-            badge={activeSource === 'median'}
-          />
-          <StatCard
-            label="Étendue"
-            value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`}
-            variant={spreadVariant}
-          />
-          <StatCard
-            label="Estimation"
-            value={stats.suggested}
-            variant={activeSource === 'suggested' ? estimationVariant : 'default'}
-            onClick={isHost ? handlePick('suggested') : undefined}
-            selected={activeSource === 'suggested'}
-            badge={activeSource === 'suggested'}
-            icon={<Award size={12} />}
-          />
-        </div>
-        {isHost && (
-          <p className="text-[11px] mt-2 text-center" style={{ color: 'var(--ink-3)' }}>
-            Cliquez sur une carte pour choisir l'estimation finale enregistrée à <em className="ff-italic">Tour suivant</em>.
-          </p>
-        )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Moyenne" value={stats.avg} />
+        <StatCard label="Médiane" value={stats.median} />
+        <StatCard
+          label="Étendue"
+          value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`}
+          variant={spreadVariant}
+        />
+        <StatCard
+          label="Estimation"
+          value={stats.suggested}
+          variant={estimationVariant}
+          icon={<Award size={12} />}
+        />
       </div>
 
       <div>
@@ -923,17 +879,7 @@ function Room({ roomId, userId, onLeave }) {
 
           {roomState.revealed && stats && stats.hasNumeric && (
             <div className="border-t pt-6 mt-8" style={{ borderColor: 'var(--line)' }}>
-              <ResultsPanel
-                stats={stats}
-                isHost={isHost}
-                chosenSource={roomState.chosenSource}
-                onSelectSource={(s) => {
-                  // Optimistic local update so the UI snaps immediately;
-                  // the next poll reconciles with the server's authoritative state.
-                  setRoomState(prev => prev ? { ...prev, chosenSource: s } : prev);
-                  setEstimateSource(roomId, s);
-                }}
-              />
+              <ResultsPanel stats={stats} />
             </div>
           )}
           {roomState.revealed && (!stats || !stats.hasNumeric) && (
