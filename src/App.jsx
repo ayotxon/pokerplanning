@@ -34,6 +34,18 @@ function genRoomId() {
 function genUserId() {
   return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
+const USER_ID_KEY = 'pp.userId';
+function getOrCreateUserId() {
+  try {
+    const existing = localStorage.getItem(USER_ID_KEY);
+    if (existing && existing.startsWith('u')) return existing;
+    const fresh = genUserId();
+    localStorage.setItem(USER_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    return genUserId();
+  }
+}
 function fmtTime(s) {
   if (s < 0) s = 0;
   const m = Math.floor(s / 60);
@@ -196,9 +208,10 @@ function Home({ onJoin }) {
     try {
       if (tab === 'create') {
         const roomId = genRoomId();
-        const userId = genUserId();
+        const userId = getOrCreateUserId();
         const newRoom = {
           name: roomName.trim(),
+          creatorId: userId,
           hostId: userId,
           participants: {
             [userId]: {
@@ -222,11 +235,18 @@ function Home({ onJoin }) {
         if (!roomId) { setError('Veuillez entrer un code de salle.'); setLoading(false); return; }
         const room = await fetchRoom(roomId);
         if (!room) { setError("Cette salle n'existe pas. Vérifiez le code."); setLoading(false); return; }
-        const userId = genUserId();
+        const userId = getOrCreateUserId();
         const updated = await updateRoom(roomId, (r) => {
+          const existing = r.participants[userId] || {};
+          // The original creator reclaims host on rejoin.
+          const isCreator = r.creatorId && r.creatorId === userId;
+          if (isCreator) r.hostId = userId;
           r.participants[userId] = {
-            name: name.trim(), vote: null, hasVoted: false,
-            isObserver: false, joinedAt: Date.now(),
+            name: name.trim(),
+            vote: existing.vote ?? null,
+            hasVoted: existing.hasVoted ?? false,
+            isObserver: existing.isObserver ?? false,
+            joinedAt: existing.joinedAt || Date.now(),
           };
           return r;
         });
