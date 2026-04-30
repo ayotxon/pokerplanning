@@ -3,12 +3,13 @@ import {
   Users, Crown, Clock, Eye, Play, RotateCcw, Copy, Check,
   LogOut, Plus, UserPlus, Sparkles, AlertCircle,
   ChevronDown, ChevronRight, Timer, Award, Share2, X,
-  RotateCw, BookOpen,
+  RotateCw, BookOpen, Pencil,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import {
   fetchRoom, saveRoom, updateRoom, recordVisit,
   castVote, revealRoom, revote, newRound, startTimer, setStory, leaveRoom, joinRoom,
+  setEstimateSource, updateHistory,
 } from './api.js';
 
 // ============================================================
@@ -481,22 +482,130 @@ const STAT_VARIANTS = {
   warning: { bg: 'var(--warning)', fg: 'white',       border: 'var(--warning)' },
 };
 
-function StatCard({ label, value, variant = 'default', icon }) {
+function StatCard({ label, value, variant = 'default', icon, onClick, selected, badge }) {
   const v = STAT_VARIANTS[variant] || STAT_VARIANTS.default;
+  const interactive = typeof onClick === 'function';
   return (
-    <div className="rounded-lg p-3"
-         style={{ background: v.bg, color: v.fg, border: `1px solid ${v.border}` }}>
+    <button
+      type="button"
+      onClick={interactive ? onClick : undefined}
+      disabled={!interactive}
+      className={`rounded-lg p-3 text-left relative ${interactive ? 'transition-transform hover:-translate-y-0.5 cursor-pointer' : 'cursor-default'}`}
+      style={{
+        background: v.bg, color: v.fg,
+        border: `1px solid ${v.border}`,
+        outline: selected ? `2px solid ${v.border}` : 'none',
+        outlineOffset: selected ? '2px' : '0',
+      }}>
       <div className="text-[10px] uppercase tracking-[0.15em] flex items-center gap-1 mb-1 font-semibold" style={{ opacity: .7 }}>
         {icon}{label}
+        {badge && (
+          <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider"
+                style={{ background: 'rgba(255,255,255,0.22)' }}>
+            <Check size={9} strokeWidth={3} /> CHOISI
+          </span>
+        )}
       </div>
       <div className="ff-display tabular" style={{ fontWeight: 600, fontSize: '1.6rem', lineHeight: 1 }}>
         {value}
       </div>
+    </button>
+  );
+}
+
+function HistoryItem({ entry, index, isHost, onEdit }) {
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingValue, setEditingValue] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(entry.story || '');
+  const [valueDraft, setValueDraft] = useState(entry.suggested != null ? String(entry.suggested) : '');
+
+  const saveTitle = () => {
+    setEditingTitle(false);
+    const next = titleDraft.trim();
+    if (next !== (entry.story || '')) onEdit(index, { story: next });
+  };
+  const saveValue = () => {
+    setEditingValue(false);
+    const trimmed = valueDraft.trim();
+    const numeric = trimmed === '' ? null : (isNaN(parseFloat(trimmed)) ? trimmed : parseFloat(trimmed));
+    if (numeric !== entry.suggested) onEdit(index, { suggested: numeric });
+  };
+  const cancelTitle = () => { setTitleDraft(entry.story || ''); setEditingTitle(false); };
+  const cancelValue = () => { setValueDraft(entry.suggested != null ? String(entry.suggested) : ''); setEditingValue(false); };
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5">
+      <span className="ff-mono text-[10px] flex-shrink-0 px-2 py-0.5 rounded"
+            style={{ background: 'var(--bg-soft)', color: 'var(--ink-3)' }}>
+        #{entry.round}
+      </span>
+      <div className="flex-1 min-w-0">
+        {editingTitle ? (
+          <input
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveTitle();
+              if (e.key === 'Escape') cancelTitle();
+            }}
+            autoFocus maxLength={500}
+            placeholder="Titre du sujet…"
+            className="w-full bg-transparent outline-none text-sm"
+            style={{ color: 'var(--ink)', borderBottom: '1px dashed var(--line)' }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={isHost ? () => setEditingTitle(true) : undefined}
+            disabled={!isHost}
+            title={isHost ? 'Modifier le titre' : undefined}
+            className={`text-sm truncate text-left w-full flex items-center gap-1.5 ${isHost ? 'cursor-pointer hover:opacity-70' : 'cursor-default'}`}
+            style={{ color: 'var(--ink)' }}>
+            <span className="truncate">
+              {entry.story
+                ? entry.story
+                : <span className="ff-italic italic" style={{ color: 'var(--ink-3)' }}>Sans titre</span>}
+            </span>
+            {isHost && <Pencil size={11} style={{ opacity: 0.4, flexShrink: 0 }} />}
+          </button>
+        )}
+      </div>
+      {editingValue ? (
+        <input
+          value={valueDraft}
+          onChange={(e) => setValueDraft(e.target.value)}
+          onBlur={saveValue}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') saveValue();
+            if (e.key === 'Escape') cancelValue();
+          }}
+          autoFocus maxLength={16}
+          className="ff-display flex-shrink-0 text-center px-2.5 py-0.5 rounded-md outline-none"
+          style={{
+            fontWeight: 700, fontSize: '1.05rem', width: 64,
+            background: 'var(--accent)', color: 'white', border: '2px solid var(--accent-2)',
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={isHost ? () => setEditingValue(true) : undefined}
+          disabled={!isHost}
+          title={isHost ? 'Modifier la valeur' : undefined}
+          className={`ff-display flex-shrink-0 px-2.5 py-0.5 rounded-md ${isHost ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}`}
+          style={{
+            fontWeight: 700, fontSize: '1.05rem',
+            background: 'var(--accent)', color: 'white',
+          }}>
+          {entry.suggested != null ? entry.suggested : '—'}
+        </button>
+      )}
     </div>
   );
 }
 
-function ResultsPanel({ stats }) {
+function ResultsPanel({ stats, isHost, chosenSource, onSelectSource }) {
   const { agreement } = stats;
   const isConsensus = agreement === 'consensus';
   const isDiverging = agreement === 'diverging';
@@ -504,6 +613,9 @@ function ResultsPanel({ stats }) {
   const estimationVariant = isConsensus ? 'success' : isDiverging ? 'warning' : 'accent';
   const spreadVariant     = isDiverging ? 'warning' : 'default';
   const modeBg            = isConsensus ? 'var(--success)' : isDiverging ? 'var(--warning)' : 'var(--accent)';
+
+  const activeSource = chosenSource || 'suggested';
+  const handlePick = (source) => () => { if (isHost && onSelectSource) onSelectSource(source); };
 
   return (
     <div className="space-y-5 fade-up">
@@ -526,20 +638,44 @@ function ResultsPanel({ stats }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Moyenne" value={stats.avg} />
-        <StatCard label="Médiane" value={stats.median} />
-        <StatCard
-          label="Étendue"
-          value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`}
-          variant={spreadVariant}
-        />
-        <StatCard
-          label="Estimation"
-          value={stats.suggested}
-          variant={estimationVariant}
-          icon={<Award size={12} />}
-        />
+      <div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard
+            label="Moyenne"
+            value={stats.avg}
+            variant={activeSource === 'avg' ? estimationVariant : 'default'}
+            onClick={isHost ? handlePick('avg') : undefined}
+            selected={activeSource === 'avg'}
+            badge={activeSource === 'avg'}
+          />
+          <StatCard
+            label="Médiane"
+            value={stats.median}
+            variant={activeSource === 'median' ? estimationVariant : 'default'}
+            onClick={isHost ? handlePick('median') : undefined}
+            selected={activeSource === 'median'}
+            badge={activeSource === 'median'}
+          />
+          <StatCard
+            label="Étendue"
+            value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`}
+            variant={spreadVariant}
+          />
+          <StatCard
+            label="Estimation"
+            value={stats.suggested}
+            variant={activeSource === 'suggested' ? estimationVariant : 'default'}
+            onClick={isHost ? handlePick('suggested') : undefined}
+            selected={activeSource === 'suggested'}
+            badge={activeSource === 'suggested'}
+            icon={<Award size={12} />}
+          />
+        </div>
+        {isHost && (
+          <p className="text-[11px] mt-2 text-center" style={{ color: 'var(--ink-3)' }}>
+            Cliquez sur une carte pour choisir l'estimation finale enregistrée à <em className="ff-italic">Tour suivant</em>.
+          </p>
+        )}
       </div>
 
       <div>
@@ -879,7 +1015,12 @@ function Room({ roomId, userId, onLeave }) {
 
           {roomState.revealed && stats && stats.hasNumeric && (
             <div className="border-t pt-6 mt-8" style={{ borderColor: 'var(--line)' }}>
-              <ResultsPanel stats={stats} />
+              <ResultsPanel
+                stats={stats}
+                isHost={isHost}
+                chosenSource={roomState.chosenSource}
+                onSelectSource={(s) => setEstimateSource(roomId, s)}
+              />
             </div>
           )}
           {roomState.revealed && (!stats || !stats.hasNumeric) && (
@@ -985,28 +1126,19 @@ function Room({ roomId, userId, onLeave }) {
               </span>
             </h2>
             <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--line)' }}>
-              {roomState.history.slice().reverse().map((entry, i, arr) => (
-                <div key={`${entry.round}-${entry.revealedAt}`}
-                     className="flex items-center gap-3 px-3 py-2.5"
-                     style={{ borderTop: i > 0 ? '1px solid var(--line)' : 'none' }}>
-                  <span className="ff-mono text-[10px] flex-shrink-0 px-2 py-0.5 rounded"
-                        style={{ background: 'var(--bg-soft)', color: 'var(--ink-3)' }}>
-                    #{entry.round}
-                  </span>
-                  <span className="text-sm flex-1 truncate" style={{ color: 'var(--ink)' }}>
-                    {entry.story
-                      ? entry.story
-                      : <span className="ff-italic italic" style={{ color: 'var(--ink-3)' }}>Sans titre</span>}
-                  </span>
-                  <span className="ff-display flex-shrink-0 px-2.5 py-0.5 rounded-md"
-                        style={{
-                          fontWeight: 700, fontSize: '1.05rem',
-                          background: 'var(--accent)', color: 'white',
-                        }}>
-                    {entry.suggested != null ? entry.suggested : '—'}
-                  </span>
-                </div>
-              ))}
+              {roomState.history.map((entry, originalIndex) => ({ entry, originalIndex }))
+                .slice().reverse()
+                .map(({ entry, originalIndex }, displayIdx) => (
+                  <div key={`${entry.round}-${entry.revealedAt}`}
+                       style={{ borderTop: displayIdx > 0 ? '1px solid var(--line)' : 'none' }}>
+                    <HistoryItem
+                      entry={entry}
+                      index={originalIndex}
+                      isHost={isHost}
+                      onEdit={(idx, patch) => updateHistory(roomId, idx, patch)}
+                    />
+                  </div>
+                ))}
             </div>
           </div>
         )}
