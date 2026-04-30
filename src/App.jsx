@@ -513,98 +513,6 @@ function StatCard({ label, value, variant = 'default', icon, onClick, selected, 
   );
 }
 
-function HistoryItem({ entry, index, isHost, onEdit }) {
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [editingValue, setEditingValue] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(entry.story || '');
-  const [valueDraft, setValueDraft] = useState(entry.suggested != null ? String(entry.suggested) : '');
-
-  const saveTitle = () => {
-    setEditingTitle(false);
-    const next = titleDraft.trim();
-    if (next !== (entry.story || '')) onEdit(index, { story: next });
-  };
-  const saveValue = () => {
-    setEditingValue(false);
-    const trimmed = valueDraft.trim();
-    const numeric = trimmed === '' ? null : (isNaN(parseFloat(trimmed)) ? trimmed : parseFloat(trimmed));
-    if (numeric !== entry.suggested) onEdit(index, { suggested: numeric });
-  };
-  const cancelTitle = () => { setTitleDraft(entry.story || ''); setEditingTitle(false); };
-  const cancelValue = () => { setValueDraft(entry.suggested != null ? String(entry.suggested) : ''); setEditingValue(false); };
-
-  return (
-    <div className="flex items-center gap-3 px-3 py-2.5">
-      <span className="ff-mono text-[10px] flex-shrink-0 px-2 py-0.5 rounded"
-            style={{ background: 'var(--bg-soft)', color: 'var(--ink-3)' }}>
-        #{entry.round}
-      </span>
-      <div className="flex-1 min-w-0">
-        {editingTitle ? (
-          <input
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveTitle();
-              if (e.key === 'Escape') cancelTitle();
-            }}
-            autoFocus maxLength={500}
-            placeholder="Titre du sujet…"
-            className="w-full bg-transparent outline-none text-sm"
-            style={{ color: 'var(--ink)', borderBottom: '1px dashed var(--line)' }}
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={isHost ? () => setEditingTitle(true) : undefined}
-            disabled={!isHost}
-            title={isHost ? 'Modifier le titre' : undefined}
-            className={`text-sm truncate text-left w-full flex items-center gap-1.5 ${isHost ? 'cursor-pointer hover:opacity-70' : 'cursor-default'}`}
-            style={{ color: 'var(--ink)' }}>
-            <span className="truncate">
-              {entry.story
-                ? entry.story
-                : <span className="ff-italic italic" style={{ color: 'var(--ink-3)' }}>Sans titre</span>}
-            </span>
-            {isHost && <Pencil size={11} style={{ opacity: 0.4, flexShrink: 0 }} />}
-          </button>
-        )}
-      </div>
-      {editingValue ? (
-        <input
-          value={valueDraft}
-          onChange={(e) => setValueDraft(e.target.value)}
-          onBlur={saveValue}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') saveValue();
-            if (e.key === 'Escape') cancelValue();
-          }}
-          autoFocus maxLength={16}
-          className="ff-display flex-shrink-0 text-center px-2.5 py-0.5 rounded-md outline-none"
-          style={{
-            fontWeight: 700, fontSize: '1.05rem', width: 64,
-            background: 'var(--accent)', color: 'white', border: '2px solid var(--accent-2)',
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={isHost ? () => setEditingValue(true) : undefined}
-          disabled={!isHost}
-          title={isHost ? 'Modifier la valeur' : undefined}
-          className={`ff-display flex-shrink-0 px-2.5 py-0.5 rounded-md ${isHost ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}`}
-          style={{
-            fontWeight: 700, fontSize: '1.05rem',
-            background: 'var(--accent)', color: 'white',
-          }}>
-          {entry.suggested != null ? entry.suggested : '—'}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function ResultsPanel({ stats, isHost, chosenSource, onSelectSource }) {
   const { agreement } = stats;
   const isConsensus = agreement === 'consensus';
@@ -1019,7 +927,12 @@ function Room({ roomId, userId, onLeave }) {
                 stats={stats}
                 isHost={isHost}
                 chosenSource={roomState.chosenSource}
-                onSelectSource={(s) => setEstimateSource(roomId, s)}
+                onSelectSource={(s) => {
+                  // Optimistic local update so the UI snaps immediately;
+                  // the next poll reconciles with the server's authoritative state.
+                  setRoomState(prev => prev ? { ...prev, chosenSource: s } : prev);
+                  setEstimateSource(roomId, s);
+                }}
               />
             </div>
           )}
@@ -1126,19 +1039,28 @@ function Room({ roomId, userId, onLeave }) {
               </span>
             </h2>
             <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--line)' }}>
-              {roomState.history.map((entry, originalIndex) => ({ entry, originalIndex }))
-                .slice().reverse()
-                .map(({ entry, originalIndex }, displayIdx) => (
-                  <div key={`${entry.round}-${entry.revealedAt}`}
-                       style={{ borderTop: displayIdx > 0 ? '1px solid var(--line)' : 'none' }}>
-                    <HistoryItem
-                      entry={entry}
-                      index={originalIndex}
-                      isHost={isHost}
-                      onEdit={(idx, patch) => updateHistory(roomId, idx, patch)}
-                    />
-                  </div>
-                ))}
+              {roomState.history.slice().reverse().map((entry, i, arr) => (
+                <div key={`${entry.round}-${entry.revealedAt}`}
+                     className="flex items-center gap-3 px-3 py-2.5"
+                     style={{ borderTop: i > 0 ? '1px solid var(--line)' : 'none' }}>
+                  <span className="ff-mono text-[10px] flex-shrink-0 px-2 py-0.5 rounded"
+                        style={{ background: 'var(--bg-soft)', color: 'var(--ink-3)' }}>
+                    #{entry.round}
+                  </span>
+                  <span className="text-sm flex-1 truncate" style={{ color: 'var(--ink)' }}>
+                    {entry.story
+                      ? entry.story
+                      : <span className="ff-italic italic" style={{ color: 'var(--ink-3)' }}>Sans titre</span>}
+                  </span>
+                  <span className="ff-display flex-shrink-0 px-2.5 py-0.5 rounded-md"
+                        style={{
+                          fontWeight: 700, fontSize: '1.05rem',
+                          background: 'var(--accent)', color: 'white',
+                        }}>
+                    {entry.suggested != null ? entry.suggested : '—'}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}
