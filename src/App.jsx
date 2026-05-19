@@ -15,8 +15,20 @@ import {
 // ============================================================
 // Constants
 // ============================================================
-const CARDS = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
+const FIB_CARDS = ['0', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?', '☕'];
 const FIB = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+const TSHIRT_CARDS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '?', '☕'];
+const TSHIRT_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+
+const DECKS = {
+  fibonacci: { label: 'Fibonacci', sub: '0, 1, 2, 3, 5, 8, 13…',  cards: FIB_CARDS },
+  tshirt:    { label: 'T-shirt',   sub: 'XS, S, M, L, XL, XXL',   cards: TSHIRT_CARDS },
+};
+
+function getDeck(deckType) {
+  return DECKS[deckType] || DECKS.fibonacci;
+}
+
 const TIMER_OPTIONS = [
   { label: '30 sec', value: 30 },
   { label: '1 min',  value: 60 },
@@ -57,8 +69,42 @@ function fmtTime(s) {
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
-function computeStats(participants) {
+function computeStats(participants, deckType = 'fibonacci') {
   const voters = Object.values(participants).filter(p => p.hasVoted && p.vote != null);
+
+  if (deckType === 'tshirt') {
+    // Ordinal deck — only sizes counted; '?' / '☕' are excluded from agreement math.
+    const sized = voters.filter(p => TSHIRT_ORDER.includes(p.vote));
+    const counts = {};
+    voters.forEach(v => { counts[v.vote] = (counts[v.vote] || 0) + 1; });
+    if (sized.length === 0) return { count: voters.length, hasNumeric: false, isOrdinal: true, distribution: counts };
+
+    const indices = sized.map(p => TSHIRT_ORDER.indexOf(p.vote)).sort((a, b) => a - b);
+    const idxMin = indices[0];
+    const idxMax = indices[indices.length - 1];
+    const min = TSHIRT_ORDER[idxMin];
+    const max = TSHIRT_ORDER[idxMax];
+    const sizedCounts = {};
+    sized.forEach(v => { sizedCounts[v.vote] = (sizedCounts[v.vote] || 0) + 1; });
+    const modeEntry = Object.entries(sizedCounts).sort((a, b) => b[1] - a[1])[0];
+    const allSame = idxMin === idxMax && sized.length > 1;
+    const spread = idxMax - idxMin;
+    let agreement = 'aligned';
+    if (allSame) agreement = 'consensus';
+    else if (spread >= 3) agreement = 'diverging';
+    return {
+      hasNumeric: false,
+      isOrdinal: true,
+      count: voters.length,
+      min, max,
+      mode: modeEntry[0],
+      consensus: allSame,
+      agreement,
+      suggested: modeEntry[0],
+      distribution: counts,
+    };
+  }
+
   const numeric = voters.filter(p => !isNaN(parseFloat(p.vote))).map(p => parseFloat(p.vote));
   if (numeric.length === 0) return { count: voters.length, hasNumeric: false };
   const sorted = [...numeric].sort((a, b) => a - b);
@@ -189,6 +235,7 @@ function Home({ onJoin }) {
   const [name, setName] = useState('');
   const [roomName, setRoomName] = useState('');
   const [hostVotes, setHostVotes] = useState(true);
+  const [deckType, setDeckType] = useState('fibonacci');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -218,6 +265,7 @@ function Home({ onJoin }) {
           name: roomName.trim(),
           creatorId: userId,
           hostId: userId,
+          deckType: DECKS[deckType] ? deckType : 'fibonacci',
           participants: {
             [userId]: {
               name: name.trim(), vote: null, hasVoted: false,
@@ -336,6 +384,40 @@ function Home({ onJoin }) {
                 style={{ background: 'var(--bg-soft)', border: '1px solid var(--line)', color: 'var(--ink)' }}
               />
             </div>
+
+            {tab === 'create' && !invitedRoom && (
+              <div className="fade-up">
+                <label className="block text-[11px] uppercase tracking-[0.15em] mb-2 font-semibold"
+                       style={{ color: 'var(--ink-2)' }}>Type de cartes</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(DECKS).map(([key, d]) => {
+                    const active = deckType === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setDeckType(key)}
+                        className="px-3 py-2.5 rounded-lg text-left transition-all"
+                        style={{
+                          background: active ? 'var(--accent-tint)' : 'var(--bg-soft)',
+                          border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`,
+                          color: 'var(--ink)',
+                          outline: active ? '2px solid var(--accent)' : 'none',
+                          outlineOffset: active ? '-1px' : '0',
+                        }}>
+                        <div className="ff-display text-sm font-semibold flex items-center gap-1.5">
+                          {d.label}
+                          {active && <Check size={13} style={{ color: 'var(--accent)' }} />}
+                        </div>
+                        <div className="ff-mono text-[10px] mt-0.5" style={{ color: 'var(--ink-3)' }}>
+                          {d.sub}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {tab === 'create' && !invitedRoom && (
               <label className="fade-up flex items-center justify-between gap-3 px-4 py-3 rounded-lg cursor-pointer"
@@ -606,7 +688,7 @@ function HistoryItem({ entry, index, isHost, onEdit }) {
 }
 
 function ResultsPanel({ stats, isHost, chosenSource, onSelectSource }) {
-  const { agreement } = stats;
+  const { agreement, isOrdinal } = stats;
   const isConsensus = agreement === 'consensus';
   const isDiverging = agreement === 'diverging';
 
@@ -639,42 +721,61 @@ function ResultsPanel({ stats, isHost, chosenSource, onSelectSource }) {
       )}
 
       <div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard
-            label="Moyenne"
-            value={stats.avg}
-            variant={activeSource === 'avg' ? estimationVariant : 'default'}
-            onClick={isHost ? handlePick('avg') : undefined}
-            selected={activeSource === 'avg'}
-            badge={activeSource === 'avg'}
-          />
-          <StatCard
-            label="Médiane"
-            value={stats.median}
-            variant={activeSource === 'median' ? estimationVariant : 'default'}
-            onClick={isHost ? handlePick('median') : undefined}
-            selected={activeSource === 'median'}
-            badge={activeSource === 'median'}
-          />
-          <StatCard
-            label="Étendue"
-            value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`}
-            variant={spreadVariant}
-          />
-          <StatCard
-            label="Estimation"
-            value={stats.suggested}
-            variant={activeSource === 'suggested' ? estimationVariant : 'default'}
-            onClick={isHost ? handlePick('suggested') : undefined}
-            selected={activeSource === 'suggested'}
-            badge={activeSource === 'suggested'}
-            icon={<Award size={12} />}
-          />
-        </div>
-        {isHost && (
-          <p className="text-[11px] mt-2 text-center" style={{ color: 'var(--ink-3)' }}>
-            Cliquez sur une carte pour choisir l'estimation finale enregistrée à <em className="ff-italic">Tour suivant</em>.
-          </p>
+        {isOrdinal ? (
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              label="Étendue"
+              value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`}
+              variant={spreadVariant}
+            />
+            <StatCard
+              label="Estimation"
+              value={stats.suggested}
+              variant={estimationVariant}
+              selected
+              icon={<Award size={12} />}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard
+                label="Moyenne"
+                value={stats.avg}
+                variant={activeSource === 'avg' ? estimationVariant : 'default'}
+                onClick={isHost ? handlePick('avg') : undefined}
+                selected={activeSource === 'avg'}
+                badge={activeSource === 'avg'}
+              />
+              <StatCard
+                label="Médiane"
+                value={stats.median}
+                variant={activeSource === 'median' ? estimationVariant : 'default'}
+                onClick={isHost ? handlePick('median') : undefined}
+                selected={activeSource === 'median'}
+                badge={activeSource === 'median'}
+              />
+              <StatCard
+                label="Étendue"
+                value={stats.min === stats.max ? stats.min : `${stats.min}–${stats.max}`}
+                variant={spreadVariant}
+              />
+              <StatCard
+                label="Estimation"
+                value={stats.suggested}
+                variant={activeSource === 'suggested' ? estimationVariant : 'default'}
+                onClick={isHost ? handlePick('suggested') : undefined}
+                selected={activeSource === 'suggested'}
+                badge={activeSource === 'suggested'}
+                icon={<Award size={12} />}
+              />
+            </div>
+            {isHost && (
+              <p className="text-[11px] mt-2 text-center" style={{ color: 'var(--ink-3)' }}>
+                Cliquez sur une carte pour choisir l'estimation finale enregistrée à <em className="ff-italic">Tour suivant</em>.
+              </p>
+            )}
+          </>
         )}
       </div>
 
@@ -801,11 +902,13 @@ function Room({ roomId, userId, onLeave }) {
 
   const isHost = roomState.hostId === userId;
   const hostName = roomState.participants?.[roomState.hostId]?.name || null;
+  const deckType = roomState.deckType === 'tshirt' ? 'tshirt' : 'fibonacci';
+  const cards = getDeck(deckType).cards;
   const participants = Object.entries(roomState.participants);
   const active = participants.filter(([, p]) => !p.isObserver);
   const votedCount = active.filter(([, p]) => p.hasVoted).length;
   const totalCount = active.length;
-  const stats = roomState.revealed ? computeStats(roomState.participants) : null;
+  const stats = roomState.revealed ? computeStats(roomState.participants, deckType) : null;
   const timerRemaining = roomState.timerEnd ? Math.max(0, (roomState.timerEnd - now) / 1000) : null;
 
   // Actions
@@ -1013,7 +1116,7 @@ function Room({ roomId, userId, onLeave }) {
             )}
           </div>
 
-          {roomState.revealed && stats && stats.hasNumeric && (
+          {roomState.revealed && stats && (stats.hasNumeric || (stats.isOrdinal && stats.suggested)) && (
             <div className="border-t pt-6 mt-8" style={{ borderColor: 'var(--line)' }}>
               <ResultsPanel
                 stats={stats}
@@ -1028,10 +1131,10 @@ function Room({ roomId, userId, onLeave }) {
               />
             </div>
           )}
-          {roomState.revealed && (!stats || !stats.hasNumeric) && (
+          {roomState.revealed && (!stats || (!stats.hasNumeric && !(stats.isOrdinal && stats.suggested))) && (
             <div className="text-center py-4 mt-4 fade-up">
               <p className="ff-italic italic" style={{ color: 'var(--ink-3)' }}>
-                Aucun vote chiffré à analyser.
+                {deckType === 'tshirt' ? 'Aucun vote à analyser.' : 'Aucun vote chiffré à analyser.'}
               </p>
             </div>
           )}
@@ -1051,7 +1154,7 @@ function Room({ roomId, userId, onLeave }) {
               )}
             </div>
             <div className="flex flex-wrap justify-center gap-2 sm:gap-2.5 pt-2">
-              {CARDS.map(card => (
+              {cards.map(card => (
                 <VoteCard
                   key={card}
                   value={card}

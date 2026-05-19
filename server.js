@@ -98,10 +98,20 @@ const FIB = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
 const ESTIMATE_SOURCES = ['avg', 'median', 'suggested'];
 
 // Computes a final estimate value from current votes, given a source preference.
-// Returns null when there are no numeric votes.
-function computeEstimate(participants, source) {
+// Returns null when there are no votes to analyze.
+function computeEstimate(participants, source, deckType) {
   const voted = Object.values(participants || {})
     .filter(p => !p.isObserver && p.hasVoted && p.vote != null);
+
+  if (deckType === 'tshirt') {
+    // Mode over sized votes only (ignore '?' and '☕').
+    const sized = voted.filter(p => ['XS','S','M','L','XL','XXL'].includes(p.vote));
+    if (sized.length === 0) return null;
+    const counts = {};
+    for (const p of sized) counts[p.vote] = (counts[p.vote] || 0) + 1;
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  }
+
   const numeric = voted.filter(p => !isNaN(parseFloat(p.vote))).map(p => parseFloat(p.vote));
   if (numeric.length === 0) return null;
   const sorted = [...numeric].sort((a, b) => a - b);
@@ -184,7 +194,7 @@ async function applyOp(id, op) {
           .filter(p => !p.isObserver && p.hasVoted);
         if (voted.length > 0) {
           const source = ESTIMATE_SOURCES.includes(room.chosenSource) ? room.chosenSource : 'suggested';
-          const value = computeEstimate(room.participants, source);
+          const value = computeEstimate(room.participants, source, room.deckType);
           const votesByName = {};
           for (const p of voted) votesByName[p.name] = p.vote;
           const entry = {
